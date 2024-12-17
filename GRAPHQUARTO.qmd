@@ -1,0 +1,903 @@
+---
+title: "GRAPHQUARTO"
+format: html
+editor: visual
+---
+
+```{r}
+widset<- 10
+hiset <- 6
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+
+geno_irrig_cld_df <- data.frame(
+  GENOTYPE = c(6, 3, 9, 5, 7, 1, 8, 4, 8, 2, 6, 9, 3, 7, 1, 5, 2, 4),
+  IRRIGATION = c(2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1),
+  emmean = c(5.855486, 6.402661, 6.642179, 6.905637, 7.092637, 7.306732, 7.337725, 7.728046,
+             7.749435, 7.992699, 8.083606, 8.110169, 8.298281, 8.737263, 8.823789, 9.135643,
+             9.208681, 9.223051),
+  SE = 0.4901633,
+  df = 7.003573,
+  lower.CL = c(3.657112, 4.204287, 4.443805, 4.707263, 4.894263, 5.108358, 5.139351, 5.529672,
+               5.551061, 5.794325, 5.885232, 5.911795, 6.099907, 6.538889, 6.625415, 6.937269,
+               7.010307, 7.024677),
+  upper.CL = c(8.053860, 8.601035, 8.840553, 9.104011, 9.291011, 9.505106, 9.536099, 9.926420,
+               9.947809, 10.191073, 10.281980, 10.308543, 10.496655, 10.935637, 11.022163,
+               11.334017, 11.407055, 11.421425),
+  .group = c("a", "b", "bc", "cde", "defg", "fg", "fg", "hij", "cd f h", "hijkl",
+             "defghi", "e g i", "g i", "j", "jk", "klm", "lm", "m"),
+  ID2 = 1:18,
+  align = 1
+)
+
+all_letters <- geno_irrig_cld_df$.group %>%
+  gsub(" ", "", .) %>%           
+  paste(collapse = "") %>%       
+  strsplit(split = "") %>%       
+  unlist() %>%
+  unique() %>%
+  sort()
+
+color_map <- c("a"="red","b"="blue","c"="green","d"="orange","e"="purple","f"="brown",
+               "g"="pink","h"="grey","i"="cyan","j"="magenta","k"="yellow","l"="black",
+               "m"="darkgreen")
+
+letter_positions <- data.frame(letter = all_letters) %>%
+  mutate(idx = row_number(),
+         x_start = 1.5 + (idx-1)*0.5,
+         x_end = 2 + (idx-1)*0.5,
+         color = color_map[letter])
+
+
+line_segments <- geno_irrig_cld_df %>%
+  rowwise() %>%
+  mutate(letter_vec = strsplit(gsub(" ", "", .group), "")) %>%
+  unnest(letter_vec)
+
+line_segments <- line_segments %>%
+  inner_join(letter_positions, by = c("letter_vec" = "letter"))
+
+vertical_segments <- line_segments %>%
+  group_by(letter_vec, x_start, x_end, color) %>%
+  summarize(y_min = min(ID2), y_max = max(ID2), .groups = "drop")
+
+
+plotimage<-ggplot(geno_irrig_cld_df, aes(x = align-1.5, y = ID2)) +
+  geom_point() +
+  geom_segment(data = line_segments,
+               aes(x = x_start, xend = x_end, y = ID2, yend = ID2, color = letter_vec),
+               inherit.aes = FALSE, size = 3) +
+  geom_segment(data = vertical_segments,
+               aes(x = (x_start + x_end)/2, xend = (x_start + x_end)/2, y = y_min, yend = y_max, color = letter_vec),
+               inherit.aes = FALSE, size = 3, linetype = "solid") +
+  
+  scale_color_manual(values = color_map) +
+  labs(x = "GROUPINGS", y = "INTERACTION LEVEL", title = "Valid Grouping of Interaction Terms", color = "GROUPING COLORS") +
+  #theme_minimal()+
+  scale_y_continuous(
+    breaks = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1),  
+    labels = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1)   
+  ) +
+  theme(axis.text.x = element_blank()) +
+  geom_text(aes(label = paste("Irrig:", IRRIGATION, "Geno:", GENOTYPE)), 
+            hjust = -0.25, vjust = 0.5, size = 3, color = "black") 
+
+
+ggsave(filename = "images/valid1.png", plot = plotimage, width = widset, height = hiset)
+
+plotimage
+```
+
+```{txt}
+
+data SimReg1(keep= Y LOCATION IRRIGATION GENOTYPE IRRIGMULT_VAL);
+	call streaminit(54321); 
+	%let mu = 6.095;
+	array geno[1:9] _temporary_ (0.18 0.855 -0.38 0.54 0.25 -0.85 0.17 -0.305 -0.46);
+	array irrigMULT[1:2] _temporary_ (-1 1); *-1 is normal, 1 is drought;
+	array irrigEFFECT[1:2] _temporary_ (-0.8116666666666665);
+	array genoIrrigInt[1:9] _temporary_ (-0.01333333 0.12166667 -0.12333333 0.04666667 -0.24333333 -0.29333333 -0.02333333 0.50166667 0.02666667);
+	
+	
+	do i = 1 to 7;              *LOCATION;
+		locVar = rand("Normal", 0, 1.83);
+		*locVar = rand("Normal", 0, 00001);
+		do j = 1 to 2;      	*IRRIGATION;
+			locByIrrigVar = rand("Normal", 0, 0.77);
+			*locByIrrigVar = rand("Normal", 0, 0.00001);
+			do k = 1 to 9;      *GENOTYPE;
+						
+				epsilon = rand("Normal", 0, 0.22);
+				*epsilon = rand("Normal", 0, 0.00001);
+				
+				*locVar = 0;
+				*locByIrrigVar = 0;
+				*epsilon = 0;
+				
+				Y = &mu + geno[k] + irrigEFFECT[1]*irrigMULT[j]+genoIrrigInt[k]*irrigMULT[j]+locVar+locByIrrigVar+epsilon;
+				
+				
+				LOCATION = i;
+				IRRIGATION = j;
+				GENOTYPE = k;
+				IRRIGMULT_VAL = irrigMULT[j];
+			
+			OUTPUT;
+			
+			END;
+		END;
+	END;
+	
+	
+	
+RUN;
+
+PROC PRINT DATA=SimReg1;
+	title simmm;
+run;
+
+proc export data=SimReg1
+    outfile="/home/u63624401/simDataForAg.txt"
+    dbms=tab
+    replace;
+    delimiter=",";
+run;
+
+
+
+PROC MIXED DATA = SIMREG1 METHOD = REML plots=residualpanel(conditional marginal);
+	CLASS LOCATION IRRIGATION GENOTYPE;
+	MODEL Y = GENOTYPE|IRRIGATION  / DDFM=KR SOLUTION OUTP=ResOut; 
+	RANDOM LOCATION IRRIGATION(LOCATION);
+	LSMEANS GENOTYPE / DIFF ADJUST=TUKEY;                   
+	LSMEANS GENOTYPE*IRRIGATION / SLICE=IRRIGATION DIFF ADJUST=TUKEY;
+	STORE OUT = MIXMOD;
+RUN;
+
+PROC PLM RESTORE = MIXMOD;
+	LSMEANS GENOTYPE / LINESTABLE ADJUST=TUKEY;
+RUN;
+PROC PLM RESTORE = MIXMOD;
+	LSMEANS GENOTYPE*IRRIGATION / LINESTABLE ADJUST=TUKEY;
+RUN;
+
+
+PROC GLIMMIX DATA = SIMREG1 plots=residualpanel(conditional marginal);
+	CLASS LOCATION IRRIGATION GENOTYPE;
+	MODEL Y = GENOTYPE|IRRIGATION  / DDFM=KR SOLUTION; 
+	RANDOM LOCATION IRRIGATION(LOCATION);
+	LSMEANS GENOTYPE / DIFF ADJUST=TUKEY;                   
+	LSMEANS GENOTYPE*IRRIGATION / SLICE=IRRIGATION DIFF ADJUST=TUKEY;
+	STORE OUT = glimmy2;
+RUN;
+
+PROC PLM RESTORE = glimmy2;
+	LSMEANS GENOTYPE / LINESTABLE ADJUST=TUKEY;
+RUN;
+
+PROC PLM RESTORE = glimmy2;
+	LSMEANS GENOTYPE*IRRIGATION / LINESTABLE ADJUST=TUKEY;
+RUN;
+
+
+
+
+
+
+
+
+
+
+
+PROC GLIMMIX DATA = SIMREG1 plots=residualpanel(conditional marginal) METHOD=LAPLACE;
+	CLASS LOCATION IRRIGATION GENOTYPE;
+	MODEL Y = GENOTYPE|IRRIGATION  / SOLUTION; 
+	RANDOM LOCATION IRRIGATION(LOCATION);
+	LSMEANS GENOTYPE / DIFF ADJUST=TUKEY;                   
+	LSMEANS GENOTYPE*IRRIGATION / SLICE=IRRIGATION DIFF ADJUST=TUKEY;
+	STORE OUT = glimmy2;
+RUN;
+
+PROC GLIMMIX DATA = SIMREG1 plots=residualpanel(conditional marginal);
+	CLASS LOCATION IRRIGATION GENOTYPE;
+	MODEL Y = GENOTYPE|IRRIGATION  / SOLUTION; 
+	RANDOM LOCATION IRRIGATION(LOCATION);
+	LSMEANS GENOTYPE / DIFF ADJUST=TUKEY;                   
+	LSMEANS GENOTYPE*IRRIGATION / SLICE=IRRIGATION DIFF ADJUST=TUKEY;
+	STORE OUT = glimmy2;
+RUN;
+
+```
+
+```{r}
+library(lme4)
+library(lmerTest)
+library(emmeans)
+library(multcomp)
+library(multcompView)
+
+SimReg1<-read.csv("C:\\Users\\trogi\\Downloads\\simDataForAg.txt")
+SimReg1$LOCATION <- as.factor(SimReg1$LOCATION)
+SimReg1$IRRIGATION <- as.factor(SimReg1$IRRIGATION)
+SimReg1$GENOTYPE <- as.factor(SimReg1$GENOTYPE)
+
+mod <- lmer(Y ~ GENOTYPE * IRRIGATION + (1|LOCATION) + (1|LOCATION:IRRIGATION),
+            data = SimReg1)
+
+summary(mod)
+emm_geno_irrig <- emmeans(mod, ~ GENOTYPE * IRRIGATION)
+geno_irrig_pairs <- contrast(emm_geno_irrig, interaction = TRUE, by = "IRRIGATION", method = "pairwise", adjust = "tukey")
+summary(geno_irrig_pairs)
+
+geno_irrig_cld <- cld(emm_geno_irrig, Letters = letters, adjust = "tukey")#, #by = "IRRIGATION")
+geno_irrig_cld
+
+```
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+
+geno_irrig_cld_df <- data.frame(
+  GENOTYPE = c(6, 3, 9, 5, 7, 1, 8, 4, 8, 2, 6, 9, 3, 7, 1, 5, 2, 4),
+  IRRIGATION = c(2, 2, 2, 2, 2, 2, 2, 2, 1, 2, 1, 1, 1, 1, 1, 1, 1, 1),
+  emmean = c(5.855486, 6.402661, 6.642179, 6.905637, 7.092637, 7.306732, 7.337725, 7.728046,
+             7.749435, 7.992699, 8.083606, 8.110169, 8.298281, 8.737263, 8.823789, 9.135643,
+             9.208681, 9.223051),
+  SE = 0.4901633,
+  df = 7.003573,
+  lower.CL = c(3.657112, 4.204287, 4.443805, 4.707263, 4.894263, 5.108358, 5.139351, 5.529672,
+               5.551061, 5.794325, 5.885232, 5.911795, 6.099907, 6.538889, 6.625415, 6.937269,
+               7.010307, 7.024677),
+  upper.CL = c(8.053860, 8.601035, 8.840553, 9.104011, 9.291011, 9.505106, 9.536099, 9.926420,
+               9.947809, 10.191073, 10.281980, 10.308543, 10.496655, 10.935637, 11.022163,
+               11.334017, 11.407055, 11.421425),
+  .group = c("a", "b", "bc", "cde", "defg", "fg", "fg", "hij", "cd f h", "hijkl",
+             "defghi", "e g i", "g i", "j", "jk", "klm", "lm", "m"),
+  ID2 = 1:18,
+  align = 1
+)
+
+all_letters <- geno_irrig_cld_df$.group %>%
+  gsub(" ", "", .) %>%           
+  paste(collapse = "") %>%       
+  strsplit(split = "") %>%       
+  unlist() %>%
+  unique() %>%
+  sort()
+
+color_map <- c("a"="red","b"="blue","c"="green","d"="orange","e"="purple","f"="brown",
+               "g"="pink","h"="grey","i"="cyan","j"="magenta","k"="yellow","l"="black",
+               "m"="darkgreen")
+
+letter_positions <- data.frame(letter = all_letters) %>%
+  mutate(idx = row_number(),
+         x_start = 1.5 + (idx-1)*0.5,
+         x_end = 2 + (idx-1)*0.5,
+         color = color_map[letter])
+
+
+line_segments <- geno_irrig_cld_df %>%
+  rowwise() %>%
+  mutate(letter_vec = strsplit(gsub(" ", "", .group), "")) %>%
+  unnest(letter_vec)
+
+line_segments <- line_segments %>%
+  inner_join(letter_positions, by = c("letter_vec" = "letter"))
+
+vertical_segments <- line_segments %>%
+  group_by(letter_vec, x_start, x_end, color) %>%
+  summarize(y_min = min(ID2), y_max = max(ID2), .groups = "drop")
+
+
+plotimage<-ggplot(geno_irrig_cld_df, aes(x = align-1.5, y = ID2)) +
+  geom_point() +
+  geom_segment(data = line_segments,
+               aes(x = x_start, xend = x_end, y = ID2, yend = ID2, color = letter_vec),
+               inherit.aes = FALSE, size = 3) +
+  geom_segment(data = vertical_segments,
+               aes(x = (x_start + x_end)/2, xend = (x_start + x_end)/2, y = y_min, yend = y_max, color = letter_vec),
+               inherit.aes = FALSE, size = 3, linetype = "solid") +
+  
+  scale_color_manual(values = color_map) +
+  labs(x = "GROUPINGS", y = "INTERACTION LEVEL", title = "Valid Grouping of Interaction Terms", color = "GROUPING COLORS") +
+  #theme_minimal()+
+  scale_y_continuous(
+    breaks = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1),  
+    labels = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1)   
+  ) +
+  theme(axis.text.x = element_blank()) +
+  geom_text(aes(label = paste("Irrig:", IRRIGATION, "Geno:", GENOTYPE)), 
+            hjust = -0.25, vjust = 0.5, size = 3, color = "black") 
+
+
+ggsave(filename = "images/valid1.png", plot = plotimage, width = widset, height = hiset)
+
+plotimage
+
+```
+
+```{r}
+
+
+
+
+levelCount <- 6
+inGroupCount <- 20
+
+data_list <- list()
+idx <- 1
+
+
+for (j in 1:levelCount) {
+  ARBLVL <- rnorm(1, 0, (5)) #.77
+  errVar <- 2#abs(rnorm(1,0,2))
+  for (k in 1:inGroupCount) {
+    #print(j)
+    #print(ARBLVL)
+    #print(k)
+    
+    Y <- ARBLVL + rnorm(1,0,errVar)
+    data_list[[idx]] <- data.frame(
+      ARBLVL = as.factor(j),
+      Y = Y
+    )
+    idx <- idx + 1
+  }
+}
+
+
+SimReg1 <- do.call(rbind, data_list)
+
+mod <- lm(Y ~ ARBLVL,
+            data = SimReg1)
+emm_geno_irrig <- emmeans(mod, ~ ARBLVL)
+
+geno_irrig_pairs <- contrast(emm_geno_irrig, method = "pairwise", adjust = "tukey")
+
+
+geno_irrig_pairs_cld <- cld(emm_geno_irrig, Letters = letters, adjust = "tukey")
+geno_irrig_pairs_cld
+
+geno_irrig_pairs_cld$.group
+
+
+
+
+
+
+geno_irrig_cld_df <- data.frame(geno_irrig_pairs_cld)
+
+
+geno_irrig_cld_df$ID2 <- 1:nrow(geno_irrig_cld_df)
+geno_irrig_cld_df$align <- 1
+
+all_letters <- geno_irrig_cld_df$.group %>%
+  gsub(" ", "", .) %>%
+  paste(collapse = "") %>%
+  strsplit(split = "") %>%
+  unlist() %>%
+  unique() %>%
+  sort()
+
+color_map <- c("a"="red","b"="blue","c"="green","d"="orange","e"="purple","f"="brown",
+               "g"="pink","h"="grey","i"="cyan","j"="magenta","k"="yellow","l"="black",
+               "m"="darkgreen")
+
+letter_positions <- data.frame(letter = all_letters) %>%
+  mutate(idx = row_number(),
+         x_start = 1.5 + (idx-1)*0.5,
+         x_end = 2 + (idx-1)*0.5,
+         color = color_map[letter])
+
+line_segments <- geno_irrig_cld_df %>%
+  rowwise() %>%
+  mutate(letter_vec = strsplit(gsub(" ", "", .group), "")) %>%
+  unnest(letter_vec)
+
+line_segments <- line_segments %>%
+  inner_join(letter_positions, by = c("letter_vec" = "letter"))
+
+vertical_segments <- line_segments %>% 
+  dplyr::group_by(letter_vec, x_start, x_end, color) %>%
+  dplyr::summarize(y_min = min(ID2), y_max = max(ID2), .groups = "drop")
+
+
+plotimage<-ggplot(geno_irrig_cld_df, aes(x = align-1.5, y = ID2)) +
+  geom_point() +
+  geom_segment(data = line_segments,
+               aes(x = x_start, xend = x_end, y = ID2, yend = ID2, color = letter_vec),
+               inherit.aes = FALSE, size = 3) +
+  geom_segment(data = vertical_segments,
+               aes(x = (x_start + x_end)/2, xend = (x_start + x_end)/2, y = y_min, yend = y_max, color = letter_vec),
+               inherit.aes = FALSE, size = 3, linetype = "solid") +
+  scale_color_manual(values = color_map) +
+  labs(x = "GROUPINGS", y = "INTERACTION LEVEL", title = "Valid Grouping of Interaction Terms", color = "GROUPING COLORS") +
+  scale_y_continuous(
+    breaks = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1),
+    labels = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1)
+  ) +
+  theme(axis.text.x = element_blank()) +
+  
+  geom_text(aes(label = paste("ARBLVL:", ARBLVL)),
+            hjust = -0.25, vjust = 0.5, size = 3, color = "black")
+
+ggsave(filename = "images/valid2.png", plot = plotimage, width = widset, height = hiset)
+
+plotimage
+
+geno_irrig_cld_df
+
+
+levelsOfComp<-sample(seq(6), 2, replace=FALSE)
+print("What is the relationship between")
+print(levelsOfComp[[1]])
+print("and")
+print(levelsOfComp[[2]])
+
+aOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[1]], ]
+
+bOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[2]], ]
+aGrp<-strsplit(aOp$.group,"")[[1]]
+bGrp<-strsplit(bOp$.group,"")[[1]]
+#aGrp <- gsub(" ", "", aGrp)
+#bGrp <- gsub(" ", "", bGrp)
+aGrp <- Filter(function(x) x != " ", aGrp)
+bGrp <- Filter(function(x) x != " ", bGrp)
+
+if (any(aGrp %in% bGrp)){
+  sigStat <- "NOT SIGNIFICANT"
+} else {
+  sigStat <- "SIGNIFICANT"
+}
+
+
+if (aOp$emmean > bOp$emmean){
+  diffStat <- "a greater"
+} else if (aOp$emmean < bOp$emmean){
+  diffStat <- "b greater"
+} else {
+  diffStat <- "exact equal"
+}
+
+print(sigStat)
+print(diffStat)
+
+```
+
+exam
+
+```{r}
+
+
+levelCount <- 6
+inGroupCount <- 20
+
+data_list <- list()
+idx <- 1
+
+
+for (j in 1:levelCount) {
+  ARBLVL <- rnorm(1, 0, (5)) #.77
+  errVar <- 2#abs(rnorm(1,0,2))
+  for (k in 1:inGroupCount) {
+    #print(j)
+    #print(ARBLVL)
+    #print(k)
+    
+    Y <- ARBLVL + rnorm(1,0,errVar)
+    data_list[[idx]] <- data.frame(
+      ARBLVL = as.factor(j),
+      Y = Y
+    )
+    idx <- idx + 1
+  }
+}
+
+
+SimReg1 <- do.call(rbind, data_list)
+
+mod <- lm(Y ~ ARBLVL,
+            data = SimReg1)
+emm_geno_irrig <- emmeans(mod, ~ ARBLVL)
+
+geno_irrig_pairs <- contrast(emm_geno_irrig, method = "pairwise", adjust = "tukey")
+
+
+geno_irrig_pairs_cld <- cld(emm_geno_irrig, Letters = letters, adjust = "tukey")
+geno_irrig_pairs_cld
+
+geno_irrig_pairs_cld$.group
+
+
+
+
+
+
+geno_irrig_cld_df <- data.frame(geno_irrig_pairs_cld)
+
+
+geno_irrig_cld_df$ID2 <- 1:nrow(geno_irrig_cld_df)
+geno_irrig_cld_df$align <- 1
+
+all_letters <- geno_irrig_cld_df$.group %>%
+  gsub(" ", "", .) %>%
+  paste(collapse = "") %>%
+  strsplit(split = "") %>%
+  unlist() %>%
+  unique() %>%
+  sort()
+
+color_map <- c("a"="red","b"="blue","c"="green","d"="orange","e"="purple","f"="brown",
+               "g"="pink","h"="grey","i"="cyan","j"="magenta","k"="yellow","l"="black",
+               "m"="darkgreen")
+
+letter_positions <- data.frame(letter = all_letters) %>%
+  mutate(idx = row_number(),
+         x_start = 1.5 + (idx-1)*0.5,
+         x_end = 2 + (idx-1)*0.5,
+         color = color_map[letter])
+
+line_segments <- geno_irrig_cld_df %>%
+  rowwise() %>%
+  mutate(letter_vec = strsplit(gsub(" ", "", .group), "")) %>%
+  unnest(letter_vec)
+
+line_segments <- line_segments %>%
+  inner_join(letter_positions, by = c("letter_vec" = "letter"))
+
+vertical_segments <- line_segments %>% 
+  dplyr::group_by(letter_vec, x_start, x_end, color) %>%
+  dplyr::summarize(y_min = min(ID2), y_max = max(ID2), .groups = "drop")
+
+
+plotimage<-ggplot(geno_irrig_cld_df, aes(x = align-1.5, y = ID2)) +
+  geom_point() +
+  geom_segment(data = line_segments,
+               aes(x = x_start, xend = x_end, y = ID2, yend = ID2, color = letter_vec),
+               inherit.aes = FALSE, size = 3) +
+  geom_segment(data = vertical_segments,
+               aes(x = (x_start + x_end)/2, xend = (x_start + x_end)/2, y = y_min, yend = y_max, color = letter_vec),
+               inherit.aes = FALSE, size = 3, linetype = "solid") +
+  scale_color_manual(values = color_map) +
+  labs(x = "GROUPINGS", y = "INTERACTION LEVEL", title = "Valid Grouping of Interaction Terms", color = "GROUPING COLORS") +
+  scale_y_continuous(
+    breaks = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1),
+    labels = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1)
+  ) +
+  theme(axis.text.x = element_blank()) +
+  
+  geom_text(aes(label = paste("ARBLVL:", ARBLVL)),
+            hjust = -0.25, vjust = 0.5, size = 3, color = "black")
+
+ggsave(filename = "images/exam1.png", plot = plotimage, width = widset, height = hiset)
+
+plotimage
+
+geno_irrig_cld_df
+
+
+levelsOfComp<-sample(seq(6), 2, replace=FALSE)
+print("What is the relationship between")
+print(levelsOfComp[[1]])
+print("and")
+print(levelsOfComp[[2]])
+
+aOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[1]], ]
+
+bOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[2]], ]
+aGrp<-strsplit(aOp$.group,"")[[1]]
+bGrp<-strsplit(bOp$.group,"")[[1]]
+#aGrp <- gsub(" ", "", aGrp)
+#bGrp <- gsub(" ", "", bGrp)
+aGrp <- Filter(function(x) x != " ", aGrp)
+bGrp <- Filter(function(x) x != " ", bGrp)
+
+if (any(aGrp %in% bGrp)){
+  sigStat <- "NOT SIGNIFICANT"
+} else {
+  sigStat <- "SIGNIFICANT"
+}
+
+
+if (aOp$emmean > bOp$emmean){
+  diffStat <- "a greater"
+} else if (aOp$emmean < bOp$emmean){
+  diffStat <- "b greater"
+} else {
+  diffStat <- "exact equal"
+}
+
+print(sigStat)
+print(diffStat)
+```
+
+```{r}
+library(emmeans)
+library(multcompView)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+setwd("C:\\Users\\trogi\\Downloads\\GraphicsExpPaper\\examFold")
+
+num_examples <- 200
+
+widset <- 8
+hiset <- 6
+
+for (e in 1:num_examples) {
+  
+  levelCount <- 6
+  inGroupCount <- 20
+  
+  data_list <- list()
+  idx <- 1
+  
+  # Generate the data
+  for (j in 1:levelCount) {
+    ARBLVL <- rnorm(1, 0, (5)) 
+    errVar <- 2
+    for (k in 1:inGroupCount) {
+      Y <- ARBLVL + rnorm(1,0,errVar)
+      data_list[[idx]] <- data.frame(
+        ARBLVL = as.factor(j),
+        Y = Y
+      )
+      idx <- idx + 1
+    }
+  }
+  
+  SimReg1 <- do.call(rbind, data_list)
+  
+  mod <- lm(Y ~ ARBLVL, data = SimReg1)
+  emm_geno_irrig <- emmeans(mod, ~ ARBLVL)
+  
+  geno_irrig_pairs <- contrast(emm_geno_irrig, method = "pairwise", adjust = "tukey")
+  
+  geno_irrig_pairs_cld <- cld(emm_geno_irrig, Letters = letters, adjust = "tukey")
+  geno_irrig_cld_df <- data.frame(geno_irrig_pairs_cld)
+  
+  geno_irrig_cld_df$ID2 <- 1:nrow(geno_irrig_cld_df)
+  geno_irrig_cld_df$align <- 1
+  
+  all_letters <- geno_irrig_cld_df$.group %>%
+    gsub(" ", "", .) %>%
+    paste(collapse = "") %>%
+    strsplit(split = "") %>%
+    unlist() %>%
+    unique() %>%
+    sort()
+  
+  color_map <- c("a"="red","b"="blue","c"="green","d"="orange","e"="purple","f"="brown",
+                 "g"="pink","h"="grey","i"="cyan","j"="magenta","k"="yellow","l"="black",
+                 "m"="darkgreen")
+  
+  letter_positions <- data.frame(letter = all_letters) %>%
+    mutate(idx = row_number(),
+           x_start = 1.5 + (idx-1)*0.5,
+           x_end = 2 + (idx-1)*0.5,
+           color = color_map[letter])
+  
+  line_segments <- geno_irrig_cld_df %>%
+    rowwise() %>%
+    mutate(letter_vec = strsplit(gsub(" ", "", .group), "")) %>%
+    unnest(letter_vec)
+  
+  line_segments <- line_segments %>%
+    inner_join(letter_positions, by = c("letter_vec" = "letter"))
+  
+  vertical_segments <- line_segments %>%
+    dplyr::group_by(letter_vec, x_start, x_end, color) %>%
+    dplyr::summarize(y_min = min(ID2), y_max = max(ID2), .groups = "drop")
+  
+  plotimage <- ggplot(geno_irrig_cld_df, aes(x = align-1.5, y = ID2)) +
+    geom_point() +
+    geom_segment(data = line_segments,
+                 aes(x = x_start, xend = x_end, y = ID2, yend = ID2, color = letter_vec),
+                 inherit.aes = FALSE, size = 3) +
+    geom_segment(data = vertical_segments,
+                 aes(x = (x_start + x_end)/2, xend = (x_start + x_end)/2, y = y_min, yend = y_max, color = letter_vec),
+                 inherit.aes = FALSE, size = 3, linetype = "solid") +
+    scale_color_manual(values = color_map) +
+    labs(x = "GROUPINGS", y = "INTERACTION LEVEL", title = "Valid Grouping of Interaction Terms", color = "GROUPING COLORS") +
+    scale_y_continuous(
+      breaks = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1),
+      labels = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1)
+    ) +
+    theme(axis.text.x = element_blank()) +
+    geom_text(aes(label = paste("ARBLVL:", ARBLVL)),
+              hjust = -0.25, vjust = 0.5, size = 3, color = "black")
+  
+  ggsave(filename = paste0("E", e, "Graph.png"), plot = plotimage, width = widset, height = hiset)
+  
+  levelsOfComp <- sample(seq(6), 2, replace=FALSE)
+  prompt_text <- paste("What is the relationship between", levelsOfComp[[1]], "and", levelsOfComp[[2]], "?")
+  
+  aOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[1]], ]
+  bOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[2]], ]
+  
+  aGrp<-strsplit(aOp$.group,"")[[1]]
+  bGrp<-strsplit(bOp$.group,"")[[1]]
+  
+  aGrp <- Filter(function(x) x != " ", aGrp)
+  bGrp <- Filter(function(x) x != " ", bGrp)
+  
+  if (any(aGrp %in% bGrp)){
+    sigStat <- "NOT SIGNIFICANT"
+  } else {
+    sigStat <- "SIGNIFICANT"
+  }
+  
+  if (aOp$emmean > bOp$emmean) {
+    diffStat <- "A is greater"
+  } else if (aOp$emmean < bOp$emmean) {
+    diffStat <- "B is greater"
+  } else {
+    diffStat <- "Both are equal"
+  }
+  
+  # Write the prompt
+  writeLines(prompt_text, con = paste0("E", e, "Prompt.txt"))
+  
+  # Write the answer (significance and direction)
+  answer_text <- paste("Significance:", sigStat, "\nDirection:", diffStat)
+  writeLines(answer_text, con = paste0("E", e, "Answer.txt"))
+  
+}
+
+
+setwd("C:\\Users\\trogi\\Downloads\\GraphicsExpPaper")
+
+
+```
+
+```{r}
+levelCount <- 3
+inGroupCount <- 20
+
+data_list <- list()
+idx <- 1
+
+
+for (j in 1:levelCount) {
+  ARBLVL <- c(150,151,300)[[j]]#rnorm(1, 0, (5)) #.77
+  errVar <- 2#abs(rnorm(1,0,2))
+  for (k in 1:inGroupCount) {
+    #print(j)
+    #print(ARBLVL)
+    #print(k)
+    
+    Y <- ARBLVL + rnorm(1,0,errVar)
+    data_list[[idx]] <- data.frame(
+      ARBLVL = as.factor(j),
+      Y = Y
+    )
+    idx <- idx + 1
+  }
+}
+
+
+SimReg1 <- do.call(rbind, data_list)
+
+mod <- lm(Y ~ ARBLVL,
+            data = SimReg1)
+emm_geno_irrig <- emmeans(mod, ~ ARBLVL)
+
+geno_irrig_pairs <- contrast(emm_geno_irrig, method = "pairwise", adjust = "tukey")
+
+
+geno_irrig_pairs_cld <- cld(emm_geno_irrig, Letters = letters, adjust = "tukey")
+geno_irrig_pairs_cld
+
+geno_irrig_pairs_cld$.group
+
+
+
+
+
+
+geno_irrig_cld_df <- data.frame(geno_irrig_pairs_cld)
+
+
+geno_irrig_cld_df$ID2 <- 1:nrow(geno_irrig_cld_df)
+geno_irrig_cld_df$align <- 1
+
+all_letters <- geno_irrig_cld_df$.group %>%
+  gsub(" ", "", .) %>%
+  paste(collapse = "") %>%
+  strsplit(split = "") %>%
+  unlist() %>%
+  unique() %>%
+  sort()
+
+color_map <- c("a"="red","b"="blue","c"="green","d"="orange","e"="purple","f"="brown",
+               "g"="pink","h"="grey","i"="cyan","j"="magenta","k"="yellow","l"="black",
+               "m"="darkgreen")
+
+letter_positions <- data.frame(letter = all_letters) %>%
+  mutate(idx = row_number(),
+         x_start = 1.5 + (idx-1)*0.5,
+         x_end = 2 + (idx-1)*0.5,
+         color = color_map[letter])
+
+line_segments <- geno_irrig_cld_df %>%
+  rowwise() %>%
+  mutate(letter_vec = strsplit(gsub(" ", "", .group), "")) %>%
+  unnest(letter_vec)
+
+line_segments <- line_segments %>%
+  inner_join(letter_positions, by = c("letter_vec" = "letter"))
+
+vertical_segments <- line_segments %>% 
+  dplyr::group_by(letter_vec, x_start, x_end, color) %>%
+  dplyr::summarize(y_min = min(ID2), y_max = max(ID2), .groups = "drop")
+
+
+plotimage<-ggplot(geno_irrig_cld_df, aes(x = align-1.5, y = ID2)) +
+  geom_point() +
+  geom_segment(data = line_segments,
+               aes(x = x_start, xend = x_end, y = ID2, yend = ID2, color = letter_vec),
+               inherit.aes = FALSE, size = 3) +
+  geom_segment(data = vertical_segments,
+               aes(x = (x_start + x_end)/2, xend = (x_start + x_end)/2, y = y_min, yend = y_max, color = letter_vec),
+               inherit.aes = FALSE, size = 3, linetype = "solid") +
+  scale_color_manual(values = color_map) +
+  labs(x = "GROUPINGS", y = "INTERACTION LEVEL", title = "Valid Grouping of Interaction Terms", color = "GROUPING COLORS") +
+  scale_y_continuous(
+    breaks = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1),
+    labels = seq(min(geno_irrig_cld_df$ID2), max(geno_irrig_cld_df$ID2), by = 1)
+  ) +
+  theme(axis.text.x = element_blank()) +
+  
+  geom_text(aes(label = paste("ARBLVL:", ARBLVL)),
+            hjust = -0.25, vjust = 0.5, size = 3, color = "black")
+
+ggsave(filename = "images/introExample1.png", plot = plotimage, width = widset, height = hiset)
+
+plotimage
+
+geno_irrig_cld_df
+
+
+levelsOfComp<-sample(seq(6), 2, replace=FALSE)
+print("What is the relationship between")
+print(levelsOfComp[[1]])
+print("and")
+print(levelsOfComp[[2]])
+
+aOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[1]], ]
+
+bOp <- geno_irrig_cld_df[geno_irrig_cld_df$ARBLVL==levelsOfComp[[2]], ]
+aGrp<-strsplit(aOp$.group,"")[[1]]
+bGrp<-strsplit(bOp$.group,"")[[1]]
+#aGrp <- gsub(" ", "", aGrp)
+#bGrp <- gsub(" ", "", bGrp)
+aGrp <- Filter(function(x) x != " ", aGrp)
+bGrp <- Filter(function(x) x != " ", bGrp)
+
+if (any(aGrp %in% bGrp)){
+  sigStat <- "NOT SIGNIFICANT"
+} else {
+  sigStat <- "SIGNIFICANT"
+}
+
+
+if (aOp$emmean > bOp$emmean){
+  diffStat <- "a greater"
+} else if (aOp$emmean < bOp$emmean){
+  diffStat <- "b greater"
+} else {
+  diffStat <- "exact equal"
+}
+
+print(sigStat)
+print(diffStat)
+```
